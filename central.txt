@@ -1,0 +1,176 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+ 
+#define MAX_RESOURCES 5
+ 
+// Structure to hold process information
+typedef struct Process {
+   int id;
+   int *resources_held;       // Resources held by the process
+   int *resources_waiting;    // Resources the process is waiting for
+   int num_resources_held;
+   int num_resources_waiting;
+} Process;
+ 
+// Global data structures
+Process *processes;
+bool **waitForGraph;
+int num_processes;
+int *parent;          // Parent tracking for cycle detection
+int *resource_parent; // Tracks the resource causing the edge
+ 
+// Function to initialize processes
+void initialize_processes(int n) {
+   num_processes = n;
+   processes = (Process *)malloc(sizeof(Process) * num_processes);
+   waitForGraph = (bool **)malloc(sizeof(bool *) * num_processes);
+   parent = (int *)malloc(sizeof(int) * num_processes);
+   resource_parent = (int *)malloc(sizeof(int) * num_processes);
+ 
+   for (int i = 0; i < num_processes; i++) {
+       processes[i].id = i;
+       processes[i].num_resources_held = 0;
+       processes[i].num_resources_waiting = 0;
+       processes[i].resources_held = (int *)malloc(sizeof(int) * MAX_RESOURCES);
+       processes[i].resources_waiting = (int *)malloc(sizeof(int) * MAX_RESOURCES);
+ 
+       for (int j = 0; j < MAX_RESOURCES; j++) {
+           processes[i].resources_held[j] = -1;
+           processes[i].resources_waiting[j] = -1;
+       }
+ 
+       waitForGraph[i] = (bool *)malloc(sizeof(bool) * num_processes);
+       for (int j = 0; j < num_processes; j++) {
+           waitForGraph[i][j] = false;
+       }
+   }
+}
+ 
+// Function to accept user input for resources
+void request_resources(int process_id) {
+   int num_held, num_waiting;
+ 
+   printf("\nEnter the number of resources held by Process %d: ", process_id);
+   scanf("%d", &num_held);
+   processes[process_id].num_resources_held = num_held;
+ 
+   printf("Enter the resources held by Process %d (space-separated): ", process_id);
+   for (int i = 0; i < num_held; i++) {
+       scanf("%d", &processes[process_id].resources_held[i]);
+   }
+ 
+   printf("Enter the number of resources Process %d is waiting for: ", process_id);
+   scanf("%d", &num_waiting);
+   processes[process_id].num_resources_waiting = num_waiting;
+ 
+   printf("Enter the resources Process %d is waiting for (space-separated): ", process_id);
+   for (int i = 0; i < num_waiting; i++) {
+       scanf("%d", &processes[process_id].resources_waiting[i]);
+   }
+}
+ 
+// Function to update the wait-for graph
+void update_wait_for_graph() {
+   for (int i = 0; i < num_processes; i++) {
+       for (int j = 0; j < num_processes; j++) {
+           waitForGraph[i][j] = false;
+ 
+           if (i != j) {
+               for (int k = 0; k < processes[i].num_resources_waiting; k++) {
+                   for (int l = 0; l < processes[j].num_resources_held; l++) {
+                       if (processes[i].resources_waiting[k] == processes[j].resources_held[l]) {
+                           waitForGraph[i][j] = true;
+                       }
+                   }
+               }
+           }
+       }
+   }
+}
+ 
+// Depth-first search to detect cycles
+bool dfs(int v, bool *visited, bool *recStack) {
+   visited[v] = true;
+   recStack[v] = true;
+ 
+   for (int i = 0; i < num_processes; i++) {
+       if (waitForGraph[v][i]) {
+           if (!visited[i]) {
+               parent[i] = v; // Store the parent process
+               if (dfs(i, visited, recStack)) {
+                   return true;
+               }
+           } else if (recStack[i]) {
+               // A cycle is detected, backtrack and print the cycle
+               printf("Cycle detected: ");
+               int current = v;
+               // Print the cycle from current to the starting process
+               while (current != i) {
+                   printf("P%d -> ", current);
+                   current = parent[current];
+               }
+               // Print the last process and complete the cycle
+               printf("P%d -> P%d\n", i, v);
+               return true;
+           }
+       }
+   }
+ 
+   recStack[v] = false;
+   return false;
+}
+ 
+// Function to detect deadlock
+bool detect_deadlock() {
+   bool visited[num_processes];
+   bool recStack[num_processes];
+   for (int i = 0; i < num_processes; i++) {
+       visited[i] = false;
+       recStack[i] = false;
+       parent[i] = -1;
+   }
+ 
+   for (int i = 0; i < num_processes; i++) {
+       if (!visited[i]) {
+           if (dfs(i, visited, recStack)) {
+               return true;
+           }
+       }
+   }
+   return false;
+}
+ 
+// Main function
+int main() {
+   int n;
+ 
+   printf("Enter the number of processes: ");
+   scanf("%d", &n);
+ 
+   initialize_processes(n);
+ 
+   for (int i = 0; i < n; i++) {
+       request_resources(i);
+   }
+ 
+   update_wait_for_graph();
+ 
+   if (detect_deadlock()) {
+       printf("Deadlock detected!\n");
+   } else {
+       printf("No deadlock detected.\n");
+   }
+ 
+   for (int i = 0; i < num_processes; i++) {
+       free(processes[i].resources_held);
+       free(processes[i].resources_waiting);
+       free(waitForGraph[i]);
+   }
+   free(processes);
+   free(waitForGraph);
+   free(parent);
+   free(resource_parent);
+ 
+   return 0;
+}

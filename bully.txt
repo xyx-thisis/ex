@@ -1,0 +1,157 @@
+#include <stdio.h>
+#include <stdlib.h>
+#define MAX 20
+
+int ids[MAX], status[MAX], n, cord;
+
+void sort_processes() {
+    int i, j, temp_id, temp_status;
+    for (i = 0; i < n - 1; i++) {
+        for (j = 0; j < n - i - 1; j++) {
+            if (ids[j] > ids[j + 1]) {
+                temp_id = ids[j];
+                ids[j] = ids[j + 1];
+                ids[j + 1] = temp_id;
+                temp_status = status[j];
+                status[j] = status[j + 1];
+                status[j + 1] = temp_status;
+            }
+        }
+    }
+}
+
+void display() {
+    int i;
+    printf("\nProcesses: ");
+    for (i = 0; i < n; i++) {
+        printf("\t%d", ids[i]);
+    }
+    printf("\nAlive:     ");
+    for (i = 0; i < n; i++) {
+        printf("\t%d", status[i]);
+    }
+    printf("\nCoordinator is: %d\n", cord);
+}
+
+void announce_cord() {
+    printf("\nCoordinator %d sends coordinator message to all lower-priority processes.\n", cord);
+}
+
+void bully() {
+    int choice, crash_id, act_id, i, gen_id, flag, temp_cord;
+    do {
+   printf("\n --- Menu for the Ring Algorithm ---");
+   printf("\n1. Crash\n2. Activate\n3. Display\n4. Exit");
+   printf("\n -----------------------------------");
+   printf("\nEnter choice: ");
+
+        scanf("%d", &choice);
+        switch (choice) {
+            case 1:
+                printf("\nEnter Process ID to Crash: ");
+                scanf("%d", &crash_id);
+                if (status[crash_id - 1]) {
+                    status[crash_id - 1] = 0;
+                    printf("\nProcess %d has crashed.\n", crash_id);
+                } else {
+                    printf("\nProcess %d is already dead or does not exist!\n", crash_id);
+                    break;
+                }
+
+                do {
+                    printf("\nEnter election generator id: ");
+                    scanf("%d", &gen_id);
+                    if (status[gen_id - 1] == 0) {
+                        printf("\nEnter a valid generator id!\n");
+                    }
+                } while (gen_id == crash_id);
+
+                flag = 0;
+                if (crash_id == cord) {
+                    for (i = gen_id + 1; i <= n; i++) {
+                        if (status[i - 1]) {
+                            temp_cord = ids[i - 1];
+                            flag = 1;
+                            break;
+                        }
+                    }
+                    if (flag == 1) {
+                        cord = temp_cord;
+                    } else {
+                        cord = gen_id;
+                    }
+                    announce_cord();
+                }
+                display();
+                break;
+
+            case 2:
+                printf("\nEnter Process ID to Activate: ");
+                scanf("%d", &act_id);
+                if (!status[act_id - 1]) {
+                    status[act_id - 1] = 1;
+                    printf("\nProcess %d has been activated.\n", act_id);
+                } else {
+                    printf("\nProcess %d is already alive!\n", act_id);
+                    break;
+                }
+
+                if (act_id > cord) {
+                    cord = act_id;
+                    announce_cord();
+                } else {
+                    for (i = act_id + 1; i <= n; i++) {
+                        if (status[i - 1]) {
+                            temp_cord = ids[i - 1];
+                            flag = 1;
+                            break;
+                        }
+                    }
+                    if (flag == 1) {
+                        cord = temp_cord;
+                    } else {
+                        cord = act_id;
+                    }
+                }
+                display();
+                break;
+
+            case 3:
+                display();
+                break;
+
+            case 4:
+                printf("\nExiting...\n");
+                break;
+
+            default:
+                printf("\nInvalid choice. Try again.\n");
+        }
+    } while (choice != 4);
+}
+
+int main() {
+    int i;
+    printf("\nEnter the number of processes: ");
+    scanf("%d", &n);
+
+    for (i = 0; i < n; i++) {
+        printf("\nEnter Process ID for Process %d: ", i + 1);
+        scanf("%d", &ids[i]);
+        printf("Enter if Process %d is Alive or not (0/1): ", ids[i]);
+        scanf("%d", &status[i]);
+    }
+
+    sort_processes();
+
+    for (i = n - 1; i >= 0; i--) {
+        if (status[i]) {
+            cord = ids[i];
+            break;
+        }
+    }
+
+    display();
+    bully();
+    return 0;
+}

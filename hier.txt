@@ -1,0 +1,178 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+
+#define MAX_RESOURCES 5
+#define MAX_GROUPS 3  // Maximum number of groups (for simplicity)
+
+typedef struct Process {
+    int id;
+    int *resources_held;
+    int *resources_waiting;
+    int num_resources_held;
+    int num_resources_waiting;
+} Process;
+
+typedef struct Coordinator {
+    int id;
+    int num_processes;
+    Process *processes;
+    bool **waitForGraph;
+    int *parent;
+    int *resource_parent;
+} Coordinator;
+
+// Global structures
+Coordinator coordinators[MAX_GROUPS];
+int num_groups;
+
+// Initialize process structures
+void initialize_processes(Coordinator *coordinator, int n) {
+    coordinator->num_processes = n;
+    coordinator->processes = (Process*)malloc(sizeof(Process) * coordinator->num_processes);
+    coordinator->waitForGraph = (bool**)malloc(sizeof(bool*) * coordinator->num_processes);
+    coordinator->parent = (int*)malloc(sizeof(int) * coordinator->num_processes);
+    coordinator->resource_parent = (int*)malloc(sizeof(int) * coordinator->num_processes);
+
+    for (int i = 0; i < coordinator->num_processes; i++) {
+        coordinator->processes[i].id = i;
+        coordinator->processes[i].num_resources_held = 0;
+        coordinator->processes[i].num_resources_waiting = 0;
+        coordinator->processes[i].resources_held = (int*)malloc(sizeof(int) * MAX_RESOURCES);
+        coordinator->processes[i].resources_waiting = (int*)malloc(sizeof(int) * MAX_RESOURCES);
+
+        for (int j = 0; j < MAX_RESOURCES; j++) {
+            coordinator->processes[i].resources_held[j] = -1;
+            coordinator->processes[i].resources_waiting[j] = -1;
+        }
+
+        coordinator->waitForGraph[i] = (bool*)malloc(sizeof(bool) * coordinator->num_processes);
+        for (int j = 0; j < coordinator->num_processes; j++) {
+            coordinator->waitForGraph[i][j] = false;
+        }
+    }
+}
+
+// Accept user input for processes in a group
+void request_resources(Coordinator *coordinator, int process_id) {
+    int num_held, num_waiting;
+
+    printf("\nEnter the number of resources held by Process %d in Coordinator %d: ", process_id, coordinator->id);
+    scanf("%d", &num_held);
+    coordinator->processes[process_id].num_resources_held = num_held;
+
+    printf("Enter the resources held by Process %d (space-separated): ", process_id);
+    for (int i = 0; i < num_held; i++) {
+        scanf("%d", &coordinator->processes[process_id].resources_held[i]);
+    }
+
+    printf("Enter the number of resources Process %d is waiting for: ", process_id);
+    scanf("%d", &num_waiting);
+    coordinator->processes[process_id].num_resources_waiting = num_waiting;
+
+    printf("Enter the resources Process %d is waiting for (space-separated): ", process_id);
+    for (int i = 0; i < num_waiting; i++) {
+        scanf("%d", &coordinator->processes[process_id].resources_waiting[i]);
+    }
+}
+
+// Update the wait-for graph for a coordinator's group
+void update_wait_for_graph(Coordinator *coordinator) {
+    for (int i = 0; i < coordinator->num_processes; i++) {
+        for (int j = 0; j < coordinator->num_processes; j++) {
+            coordinator->waitForGraph[i][j] = false;
+
+            if (i != j) {
+                for (int k = 0; k < coordinator->processes[i].num_resources_waiting; k++) {
+                    for (int l = 0; l < coordinator->processes[j].num_resources_held; l++) {
+                        if (coordinator->processes[i].resources_waiting[k] == coordinator->processes[j].resources_held[l]) {
+                            coordinator->waitForGraph[i][j] = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Depth-first search for cycle detection
+bool dfs(Coordinator *coordinator, int v, bool *visited, bool *recStack) {
+    visited[v] = true;
+    recStack[v] = true;
+
+    for (int i = 0; i < coordinator->num_processes; i++) {
+        if (coordinator->waitForGraph[v][i]) {
+            if (!visited[i]) {
+                coordinator->parent[i] = v;
+                if (dfs(coordinator, i, visited, recStack)) {
+                    return true;
+                }
+            } else if (recStack[i]) {
+                printf("Cycle detected in Coordinator %d: ", coordinator->id);
+                int current = v;
+                while (current != i) {
+                    printf("P%d -> ", current);
+                    current = coordinator->parent[current];
+                }
+                printf("P%d -> P%d\n", i, v);
+                return true;
+            }
+        }
+    }
+
+    recStack[v] = false;
+    return false;
+}
+
+// Detect deadlock at a coordinator level
+bool detect_deadlock(Coordinator *coordinator) {
+    bool visited[coordinator->num_processes];
+    bool recStack[coordinator->num_processes];
+
+    for (int i = 0; i < coordinator->num_processes; i++) {
+        visited[i] = false;
+        recStack[i] = false;
+        coordinator->parent[i] = -1;
+    }
+
+    for (int i = 0; i < coordinator->num_processes; i++) {
+        if (!visited[i]) {
+            if (dfs(coordinator, i, visited, recStack)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+int main() {
+    int n;
+
+    // Accept the number of groups
+    printf("Enter the number of groups: ");
+    scanf("%d", &num_groups);
+
+    // Initialize the coordinators and processes
+    for (int i = 0; i < num_groups; i++) {
+        printf("\nEnter the number of processes for Coordinator %d: ", i);
+        scanf("%d", &n);
+        initialize_processes(&coordinators[i], n);
+
+        // Accept resource allocation and waiting for each process in the group
+        for (int j = 0; j < n; j++) {
+            request_resources(&coordinators[i], j);
+        }
+
+        // Update the wait-for graph for the coordinator
+        update_wait_for_graph(&coordinators[i]);
+
+        // Check for deadlock in the group
+        if (detect_deadlock(&coordinators[i])) {
+            printf("Deadlock detected by Coordinator %d!\n", i);
+        } else {
+            printf("No deadlock detected by Coordinator %d.\n", i);
+        }
+    }
+
+    return 0;
+}
